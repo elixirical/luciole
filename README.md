@@ -1,6 +1,6 @@
-# luciole
+# luciole 🔥🪰
 
-luciole (French for firefly) is an attempt at building a collaborative epub annotation webapp. It seeks to provide a reading environment on the web that allows two or more friends to read an epub with a rich suite of annotation tools that update live as they occur.
+luciole (French for firefly) is an attempt at building a collaborative epub annotation webapp. It seeks to provide a reading environment on the web that allows two or more friends to read an epub with a rich suite of annotation tools that update live as they occur. No promises this ever gets finished. 
 
 ## List of things to do  
 ```
