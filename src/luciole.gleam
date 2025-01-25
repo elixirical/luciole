@@ -6,17 +6,6 @@ import gleam/list
 import gleam/result
 import simplifile
 
-//pub type EPub
-
-//@external(erlang, "Elixir.BUPE", "parse")
-//pub fn parse(x: String) -> EPub
-
-//@external(erlang, "zip", "unzip")
-//pub fn list_dir(name: String) -> EPub
-
-//@external(erlang, "Elixir.Unzip.LocalFile", "open")
-//pub fn open(x: String) -> EPub
-
 const eocd_signature = 0x06054b50
 
 pub fn main() {
@@ -30,29 +19,42 @@ pub fn main() {
       0,
     >>)
 
-  //io.debug(eocd_byte_buffer)
-
-  // this converts the signature to a bit array against which we can check to see if we've located the signature
   let eocd_sig_bitarray =
     hex_to_bytes(
       prepend0(result.unwrap(int.digits(eocd_signature, 16), [])),
       <<>>,
     )
 
-  let #(eocd, eocd_offset) = find_eocd(eocd_byte_buffer, eocd_sig_bitarray, 0)
+  let #(eocd, eocd_offset) = find_eocd(eocd_byte_buffer, eocd_sig_bitarray, 22)
   let cdh_offset_from_eocd = result.unwrap(bit_array.slice(eocd, 12, 4), <<>>)
+  let cdh_length = result.unwrap(bit_array.slice(eocd, 16, 4), <<>>)
 
-  io.print(bit_array.inspect(cdh_offset_from_eocd))
+  io.print(bit_array.inspect(eocd) <> "\n")
+  io.print(bit_array.inspect(cdh_offset_from_eocd) <> "\n")
 
-  let cdh_offset_int = bytes_to_int(cdh_offset_from_eocd, 1, 0)
+  let cdh_offset_int = bytes_to_int(cdh_offset_from_eocd, 0, 0)
 
-  io.debug(cdh_offset_int)
-  //0x0F44
-  //io.debug(eocd_offset)
-  //io.print(bit_array.inspect(eocd))
-  //io.debug(bit_array.byte_size(eocd))
+  io.print(int.to_string(file_bit_length) <> "\n")
+  let total_cdh_from_eof_offset = eocd_offset + cdh_offset_int
+  io.print("\n" <> int.to_string(total_cdh_from_eof_offset) <> "\n")
+
+  let cdh =
+    bit_array.slice(file, file_bit_length - total_cdh_from_eof_offset, 4)
+  io.debug(cdh)
+  //let cdh =
+  //  find_cdh(
+  //    file,
+  //    file_bit_length - total_cdh_from_eof_offset,
+  //    bytes_to_int(cdh_length, 1, 0),
+  //  )
+  //io.debug(cdh)
 }
 
+/// find_eocd( buffer: BitArray, signature: BitArray, n = 22: int ) -> #(BitArray, Int)
+/// This function finds the eocd in a bit array by recursively parsing through it backwards.
+/// It takes in a signature as a BitArray instead of a hex int. To convert the int to a
+/// BitArray, use hex_to_bytes() (see below.). The final argument is a tally for how far
+/// back the beginning of the eocd is from the end of the file. 
 fn find_eocd(
   eocd_buffer: BitArray,
   signature: BitArray,
@@ -60,7 +62,6 @@ fn find_eocd(
 ) -> #(BitArray, Int) {
   //let signature = 0x06054b50
   let recursive_length = bit_array.byte_size(eocd_buffer)
-  io.debug(offset)
   let compare_to_sig =
     result.unwrap(bit_array.slice(eocd_buffer, recursive_length - 22, 22), <<0>>)
 
@@ -103,7 +104,7 @@ fn prepend0(hex_list: List(Int)) -> List(Int) {
 fn bytes_to_int(bitarray: BitArray, power: Int, value: Int) -> Int {
   //pow must be a float
   let calc_value = fn(val, pow) {
-    val * { float.round(result.unwrap(int.power(16, pow), 0.0)) }
+    val * { float.round(result.unwrap(int.power(256, pow), 0.0)) }
   }
 
   let first_byte =
@@ -121,14 +122,6 @@ fn bytes_to_int(bitarray: BitArray, power: Int, value: Int) -> Int {
       bit_array.slice(bitarray, 1, bit_array.byte_size(bitarray) - 1),
       <<>>,
     )
-  io.print("\nfirst_byte: " <> int.to_string(first_byte) <> "\n")
-  io.print(
-    "bitarray_bytesize: "
-    <> int.to_string(bit_array.byte_size(bitarray))
-    <> "\n",
-  )
-  io.print("Power: " <> int.to_string(power))
-  io.print(bit_array.inspect(rest_of_array))
 
   case bit_array.byte_size(bitarray) {
     1 -> value
@@ -139,4 +132,62 @@ fn bytes_to_int(bitarray: BitArray, power: Int, value: Int) -> Int {
         value + calc_value(first_byte, int.to_float(power)),
       )
   }
+}
+
+///currently unused
+//fn find_cdh(
+//  zip_bitarray: BitArray,
+//  cdh_offset: Int,
+//  cdh_length: Int,
+//) -> BitArray {
+//  let length = bit_array.byte_size(zip_bitarray)
+//  result.unwrap(bit_array.slice(zip_bitarray, cdh_offset, 40), <<>>)
+//}
+
+pub type CentralRecord {
+  CentralRecord(
+    location: Int,
+    header: BitArray,
+    version: BitArray,
+    version_extract: BitArray,
+    bit_flag: BitArray,
+    compression_method: BitArray,
+    last_modified_time: BitArray,
+    last_modified_date: BitArray,
+    crc_32: BitArray,
+    compressed_size: BitArray,
+    uncompressed_size: BitArray,
+    file_name_length: BitArray,
+    extra_field_length: BitArray,
+    file_comment_length: BitArray,
+    disk_number_start: BitArray,
+    internal_attribute: BitArray,
+    external_attributes: BitArray,
+    relative_offset_local_header: BitArray,
+    file_name: BitArray,
+    extra_field: BitArray,
+    file_comment: BitArray,
+  )
+}
+
+fn read_central_headers(
+  bitarray: BitArray,
+  header_offset: Int,
+  info: List(CentralRecord),
+) -> List(CentralRecord) {
+  let firstfewbytes = result.unwrap(bit_array.slice(bitarray, 0, 46), <<>>)
+}
+
+fn record_n_bytes(bitarray: BitArray, bytes: Int) -> #(BitArray, BitArray) {
+  #(
+    result.unwrap(bit_array.slice(bitarray, 0, bytes), <<>>),
+    result.unwrap(
+      bit_array.slice(
+        bitarray,
+        bytes,
+        -{ bit_array.byte_size(bitarray) - bytes },
+      ),
+      <<>>,
+    ),
+  )
 }
