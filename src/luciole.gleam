@@ -41,6 +41,8 @@ pub fn main() {
   let cdh =
     bit_array.slice(file, file_bit_length - total_cdh_from_eof_offset, 4)
   io.debug(cdh)
+
+  io.debug(read_central_headers(file, total_cdh_from_eof_offset, []))
   //let cdh =
   //  find_cdh(
   //    file,
@@ -101,6 +103,7 @@ fn prepend0(hex_list: List(Int)) -> List(Int) {
   }
 }
 
+/// bytes_to_int(BitArray, power = 0, value = 0)
 fn bytes_to_int(bitarray: BitArray, power: Int, value: Int) -> Int {
   //pow must be a float
   let calc_value = fn(val, pow) {
@@ -163,7 +166,7 @@ pub type CentralRecord {
     disk_number_start: BitArray,
     internal_attribute: BitArray,
     external_attributes: BitArray,
-    relative_offset_local_header: BitArray,
+    relative_offset: BitArray,
     file_name: BitArray,
     extra_field: BitArray,
     file_comment: BitArray,
@@ -176,18 +179,120 @@ fn read_central_headers(
   info: List(CentralRecord),
 ) -> List(CentralRecord) {
   let firstfewbytes = result.unwrap(bit_array.slice(bitarray, 0, 46), <<>>)
-}
-
-fn record_n_bytes(bitarray: BitArray, bytes: Int) -> #(BitArray, BitArray) {
-  #(
-    result.unwrap(bit_array.slice(bitarray, 0, bytes), <<>>),
+  io.debug(firstfewbytes)
+  let record =
+    CentralRecord(
+      location: header_offset,
+      header: result.unwrap(bit_array.slice(firstfewbytes, 0, 4), <<>>),
+      version: result.unwrap(bit_array.slice(firstfewbytes, 4, 2), <<>>),
+      version_extract: result.unwrap(bit_array.slice(firstfewbytes, 6, 2), <<>>),
+      bit_flag: result.unwrap(bit_array.slice(firstfewbytes, 8, 2), <<>>),
+      compression_method: result.unwrap(
+        bit_array.slice(firstfewbytes, 10, 2),
+        <<>>,
+      ),
+      last_modified_time: result.unwrap(
+        bit_array.slice(firstfewbytes, 12, 2),
+        <<>>,
+      ),
+      last_modified_date: result.unwrap(
+        bit_array.slice(firstfewbytes, 14, 2),
+        <<>>,
+      ),
+      crc_32: result.unwrap(bit_array.slice(firstfewbytes, 16, 4), <<>>),
+      compressed_size: result.unwrap(
+        bit_array.slice(firstfewbytes, 20, 4),
+        <<>>,
+      ),
+      uncompressed_size: result.unwrap(
+        bit_array.slice(firstfewbytes, 24, 4),
+        <<>>,
+      ),
+      file_name_length: result.unwrap(
+        bit_array.slice(firstfewbytes, 28, 2),
+        <<>>,
+      ),
+      extra_field_length: result.unwrap(
+        bit_array.slice(firstfewbytes, 30, 2),
+        <<>>,
+      ),
+      file_comment_length: result.unwrap(
+        bit_array.slice(firstfewbytes, 32, 2),
+        <<>>,
+      ),
+      disk_number_start: result.unwrap(
+        bit_array.slice(firstfewbytes, 34, 2),
+        <<>>,
+      ),
+      internal_attribute: result.unwrap(
+        bit_array.slice(firstfewbytes, 36, 2),
+        <<>>,
+      ),
+      external_attributes: result.unwrap(
+        bit_array.slice(firstfewbytes, 38, 4),
+        <<>>,
+      ),
+      relative_offset: result.unwrap(
+        bit_array.slice(firstfewbytes, 42, 4),
+        <<>>,
+      ),
+      file_name: <<>>,
+      extra_field: <<>>,
+      file_comment: <<>>,
+    )
+  let namelength = bytes_to_int(record.file_name_length, 0, 0)
+  let extrafield = bytes_to_int(record.extra_field_length, 0, 0)
+  let filecomment = bytes_to_int(record.file_comment_length, 0, 0)
+  let new_record =
+    CentralRecord(
+      ..record,
+      file_name: result.unwrap(
+        bit_array.slice(firstfewbytes, 46, namelength),
+        <<>>,
+      ),
+      extra_field: result.unwrap(
+        bit_array.slice(firstfewbytes, 46 + namelength, extrafield),
+        <<>>,
+      ),
+      file_comment: result.unwrap(
+        bit_array.slice(
+          firstfewbytes,
+          46 + namelength + extrafield,
+          filecomment,
+        ),
+        <<>>,
+      ),
+    )
+  let nextarray =
     result.unwrap(
       bit_array.slice(
         bitarray,
-        bytes,
-        -{ bit_array.byte_size(bitarray) - bytes },
+        46 + namelength + extrafield + filecomment,
+        bit_array.byte_size(bitarray)
+          - { 46 + namelength + extrafield + filecomment },
       ),
       <<>>,
-    ),
-  )
+    )
+  case bit_array.starts_with(nextarray, record.header) {
+    True ->
+      read_central_headers(
+        nextarray,
+        header_offset + 46 + namelength + extrafield + filecomment,
+        [new_record, ..info],
+      )
+    False -> [new_record, ..info]
+  }
 }
+//fn _record_n_bytes(bitarray: BitArray, bytes: Int) -> #(BitArray, BitArray) {
+//  #(
+//    result.unwrap(bit_array.slice(bitarray, 0, bytes), <<>>),
+//    result.unwrap(
+//      bit_array.slice(
+//        bitarray,
+//        bytes,
+//        -{ bit_array.byte_size(bitarray) - bytes },
+//      ),
+//      <<>>,
+//    ),
+//  )
+//}
