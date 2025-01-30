@@ -27,22 +27,25 @@ pub fn main() {
 
   let #(eocd, eocd_offset) = find_eocd(eocd_byte_buffer, eocd_sig_bitarray, 22)
   let cdh_offset_from_eocd = result.unwrap(bit_array.slice(eocd, 12, 4), <<>>)
-  let cdh_length = result.unwrap(bit_array.slice(eocd, 16, 4), <<>>)
+  //let cdh_length = result.unwrap(bit_array.slice(eocd, 16, 4), <<>>)
 
-  io.print(bit_array.inspect(eocd) <> "\n")
-  io.print(bit_array.inspect(cdh_offset_from_eocd) <> "\n")
+  //io.print(bit_array.inspect(eocd) <> "\n")
+  //io.print(bit_array.inspect(cdh_offset_from_eocd) <> "\n")
 
   let cdh_offset_int = bytes_to_int(cdh_offset_from_eocd, 0, 0)
 
-  io.print(int.to_string(file_bit_length) <> "\n")
+  //io.print(int.to_string(file_bit_length) <> "\n")
   let total_cdh_from_eof_offset = eocd_offset + cdh_offset_int
-  io.print("\n" <> int.to_string(total_cdh_from_eof_offset) <> "\n")
+  //io.print("\n" <> int.to_string(total_cdh_from_eof_offset) <> "\n")
 
   let cdh =
-    bit_array.slice(file, file_bit_length - total_cdh_from_eof_offset, 4)
-  io.debug(cdh)
+    result.unwrap(
+      bit_array.slice(file, file_bit_length, -total_cdh_from_eof_offset),
+      <<>>,
+    )
+  //io.debug(cdh)
 
-  io.debug(read_central_headers(file, total_cdh_from_eof_offset, []))
+  io.debug(read_central_headers(cdh, total_cdh_from_eof_offset, []))
   //let cdh =
   //  find_cdh(
   //    file,
@@ -179,7 +182,7 @@ fn read_central_headers(
   info: List(CentralRecord),
 ) -> List(CentralRecord) {
   let firstfewbytes = result.unwrap(bit_array.slice(bitarray, 0, 46), <<>>)
-  io.debug(firstfewbytes)
+  //io.debug(firstfewbytes)
   let record =
     CentralRecord(
       location: header_offset,
@@ -283,16 +286,3 @@ fn read_central_headers(
     False -> [new_record, ..info]
   }
 }
-//fn _record_n_bytes(bitarray: BitArray, bytes: Int) -> #(BitArray, BitArray) {
-//  #(
-//    result.unwrap(bit_array.slice(bitarray, 0, bytes), <<>>),
-//    result.unwrap(
-//      bit_array.slice(
-//        bitarray,
-//        bytes,
-//        -{ bit_array.byte_size(bitarray) - bytes },
-//      ),
-//      <<>>,
-//    ),
-//  )
-//}
