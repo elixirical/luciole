@@ -140,16 +140,6 @@ fn bytes_to_int(bitarray: BitArray, power: Int, value: Int) -> Int {
   }
 }
 
-///currently unused
-//fn find_cdh(
-//  zip_bitarray: BitArray,
-//  cdh_offset: Int,
-//  cdh_length: Int,
-//) -> BitArray {
-//  let length = bit_array.byte_size(zip_bitarray)
-//  result.unwrap(bit_array.slice(zip_bitarray, cdh_offset, 40), <<>>)
-//}
-
 pub type CentralRecord {
   CentralRecord(
     location: Int,
@@ -176,6 +166,12 @@ pub type CentralRecord {
   )
 }
 
+/// read_central_headers(bit_array, offset, []) 
+/// make sure that the bit_array begins at the FIRST CENTRAL HEADER, and terminates at the end of the bitstream.
+/// the offset is the distance from the first central header to the end of the bitstream, and the final argument
+/// is an empty list that is returned. 
+/// 
+/// Can probably reduce some processing time by reading the associated file at the same time as this.
 fn read_central_headers(
   bitarray: BitArray,
   header_offset: Int,
@@ -285,4 +281,8 @@ fn read_central_headers(
       )
     False -> [new_record, ..info]
   }
+}
+
+fn find_local_headers(records: List(CentralRecord)) {
+  todo
 }
