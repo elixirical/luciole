@@ -46,8 +46,9 @@ pub fn main() {
     )
   //io.debug(cdh)
 
-  io.debug(read_central_headers(cdh, total_cdh_from_eof_offset, []))
-  io.debug(hash_file(file))
+  let centheaders = read_central_headers(cdh, total_cdh_from_eof_offset, [])
+  find_local_headers(centheaders, file, [])
+  //io.debug(hash_file(file))
   //let cdh =
   //  find_cdh(
   //    file,
@@ -219,6 +220,7 @@ fn read_central_headers(
         <<>>,
       ),
     )
+  //something is wrong with the indexing of each entry i believe! ie. CentralHeader.location
   let nextarray =
     result.unwrap(
       bit_array.slice(
@@ -240,19 +242,49 @@ fn read_central_headers(
   }
 }
 
-fn find_local_headers(records: List(CentralRecord), file: BitArray, out: List(#(String, BitArray))) -> List(#(String, BitArray)) {
+fn find_local_headers(
+  records: List(CentralRecord),
+  file: BitArray,
+  out: List(#(String, BitArray)),
+) -> List(#(String, BitArray)) {
   //assumes unencrypted as per epub
   let #(first, rest) = list.split(records, 1)
+  let firstrecord = result.unwrap(list.first(first), write_dummy_record())
+  let filelength = bytes_to_int(firstrecord.uncompressed_size, 0, 0)
+  io.debug(filelength)
+  let index_of_local_header =
+    //this is the broken part
+    bit_array.byte_size(file)
+    - { firstrecord.location + bytes_to_int(firstrecord.relative_offset, 0, 0) }
+  io.debug(index_of_local_header)
+  let file_name_length = bytes_to_int(firstrecord.file_name_length, 0, 0)
+  io.debug(file_name_length)
+  io.debug(
+    result.unwrap(bit_array.slice(file, index_of_local_header + 28, 2), <<>>),
+  )
+  let extra_field_length =
+    bytes_to_int(
+      result.unwrap(bit_array.slice(file, index_of_local_header + 28, 2), <<>>),
+      0,
+      0,
+    )
+  io.debug(extra_field_length)
+  let filedata =
+    result.unwrap(
+      bit_array.slice(
+        file,
+        index_of_local_header + 30 + file_name_length + extra_field_length,
+        filelength,
+      ),
+      <<>>,
+    )
+  let file_name = result.unwrap(bit_array.to_string(firstrecord.file_name), "")
+  let assert Ok(Nil) =
+    simplifile.write_bits(to: "../testout/" <> file_name, bits: filedata)
 
-  let index_of_local_header = bit_array.byte_size(file) - { bytes_to_int(first.location) + bytes_to_int(first.relative_offset) }
-  let file_name_length = first.file_name_length
-  let extra_field_length = result.unwrap(bit_array.slice(file, index_of_local_header + 28, 2), <<>>)
-  let filelength = first.uncompressed_size
-  let filedata = result.unwrap(bit_array.slice(file, index_of_local_header + 30 + file_name_length + extra_field_length, filelength))
-
-  case bit_array.byte_size(rest) {
-    0 -> 
-    _ ->
+  case list.length(rest) {
+    0 -> [#(file_name, filedata), ..out]
+    _ -> find_local_headers(rest, file, [#(file_name, filedata), ..out])
   }
 }
 
@@ -260,4 +292,31 @@ fn hash_file(file: BitArray) -> Int {
   bit_array.base64_encode(file, False)
   |> murmur3a.hash_string(7)
   |> murmur3a.int_digest()
+}
+
+fn write_dummy_record() -> CentralRecord {
+  let _record =
+    CentralRecord(
+      location: 0,
+      header: <<>>,
+      version: <<>>,
+      version_extract: <<>>,
+      bit_flag: <<>>,
+      compression_method: <<>>,
+      last_modified_time: <<>>,
+      last_modified_date: <<>>,
+      crc_32: <<>>,
+      compressed_size: <<>>,
+      uncompressed_size: <<>>,
+      file_name_length: <<>>,
+      extra_field_length: <<>>,
+      file_comment_length: <<>>,
+      disk_number_start: <<>>,
+      internal_attribute: <<>>,
+      external_attributes: <<>>,
+      relative_offset: <<>>,
+      file_name: <<>>,
+      extra_field: <<>>,
+      file_comment: <<>>,
+    )
 }
