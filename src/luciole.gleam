@@ -4,6 +4,7 @@ import gleam/int
 import gleam/io
 import gleam/list
 import gleam/result
+import murmur3a
 import simplifile
 
 const eocd_signature = 0x06054b50
@@ -46,6 +47,7 @@ pub fn main() {
   //io.debug(cdh)
 
   io.debug(read_central_headers(cdh, total_cdh_from_eof_offset, []))
+  io.debug(hash_file(file))
   //let cdh =
   //  find_cdh(
   //    file,
@@ -177,64 +179,26 @@ fn read_central_headers(
   header_offset: Int,
   info: List(CentralRecord),
 ) -> List(CentralRecord) {
-  let firstfewbytes = result.unwrap(bit_array.slice(bitarray, 0, 46), <<>>)
-  //io.debug(firstfewbytes)
   let record =
     CentralRecord(
       location: header_offset,
-      header: result.unwrap(bit_array.slice(firstfewbytes, 0, 4), <<>>),
-      version: result.unwrap(bit_array.slice(firstfewbytes, 4, 2), <<>>),
-      version_extract: result.unwrap(bit_array.slice(firstfewbytes, 6, 2), <<>>),
-      bit_flag: result.unwrap(bit_array.slice(firstfewbytes, 8, 2), <<>>),
-      compression_method: result.unwrap(
-        bit_array.slice(firstfewbytes, 10, 2),
-        <<>>,
-      ),
-      last_modified_time: result.unwrap(
-        bit_array.slice(firstfewbytes, 12, 2),
-        <<>>,
-      ),
-      last_modified_date: result.unwrap(
-        bit_array.slice(firstfewbytes, 14, 2),
-        <<>>,
-      ),
-      crc_32: result.unwrap(bit_array.slice(firstfewbytes, 16, 4), <<>>),
-      compressed_size: result.unwrap(
-        bit_array.slice(firstfewbytes, 20, 4),
-        <<>>,
-      ),
-      uncompressed_size: result.unwrap(
-        bit_array.slice(firstfewbytes, 24, 4),
-        <<>>,
-      ),
-      file_name_length: result.unwrap(
-        bit_array.slice(firstfewbytes, 28, 2),
-        <<>>,
-      ),
-      extra_field_length: result.unwrap(
-        bit_array.slice(firstfewbytes, 30, 2),
-        <<>>,
-      ),
-      file_comment_length: result.unwrap(
-        bit_array.slice(firstfewbytes, 32, 2),
-        <<>>,
-      ),
-      disk_number_start: result.unwrap(
-        bit_array.slice(firstfewbytes, 34, 2),
-        <<>>,
-      ),
-      internal_attribute: result.unwrap(
-        bit_array.slice(firstfewbytes, 36, 2),
-        <<>>,
-      ),
-      external_attributes: result.unwrap(
-        bit_array.slice(firstfewbytes, 38, 4),
-        <<>>,
-      ),
-      relative_offset: result.unwrap(
-        bit_array.slice(firstfewbytes, 42, 4),
-        <<>>,
-      ),
+      header: result.unwrap(bit_array.slice(bitarray, 0, 4), <<>>),
+      version: result.unwrap(bit_array.slice(bitarray, 4, 2), <<>>),
+      version_extract: result.unwrap(bit_array.slice(bitarray, 6, 2), <<>>),
+      bit_flag: result.unwrap(bit_array.slice(bitarray, 8, 2), <<>>),
+      compression_method: result.unwrap(bit_array.slice(bitarray, 10, 2), <<>>),
+      last_modified_time: result.unwrap(bit_array.slice(bitarray, 12, 2), <<>>),
+      last_modified_date: result.unwrap(bit_array.slice(bitarray, 14, 2), <<>>),
+      crc_32: result.unwrap(bit_array.slice(bitarray, 16, 4), <<>>),
+      compressed_size: result.unwrap(bit_array.slice(bitarray, 20, 4), <<>>),
+      uncompressed_size: result.unwrap(bit_array.slice(bitarray, 24, 4), <<>>),
+      file_name_length: result.unwrap(bit_array.slice(bitarray, 28, 2), <<>>),
+      extra_field_length: result.unwrap(bit_array.slice(bitarray, 30, 2), <<>>),
+      file_comment_length: result.unwrap(bit_array.slice(bitarray, 32, 2), <<>>),
+      disk_number_start: result.unwrap(bit_array.slice(bitarray, 34, 2), <<>>),
+      internal_attribute: result.unwrap(bit_array.slice(bitarray, 36, 2), <<>>),
+      external_attributes: result.unwrap(bit_array.slice(bitarray, 38, 4), <<>>),
+      relative_offset: result.unwrap(bit_array.slice(bitarray, 42, 4), <<>>),
       file_name: <<>>,
       extra_field: <<>>,
       file_comment: <<>>,
@@ -245,20 +209,13 @@ fn read_central_headers(
   let new_record =
     CentralRecord(
       ..record,
-      file_name: result.unwrap(
-        bit_array.slice(firstfewbytes, 46, namelength),
-        <<>>,
-      ),
+      file_name: result.unwrap(bit_array.slice(bitarray, 46, namelength), <<>>),
       extra_field: result.unwrap(
-        bit_array.slice(firstfewbytes, 46 + namelength, extrafield),
+        bit_array.slice(bitarray, 46 + namelength, extrafield),
         <<>>,
       ),
       file_comment: result.unwrap(
-        bit_array.slice(
-          firstfewbytes,
-          46 + namelength + extrafield,
-          filecomment,
-        ),
+        bit_array.slice(bitarray, 46 + namelength + extrafield, filecomment),
         <<>>,
       ),
     )
@@ -283,6 +240,23 @@ fn read_central_headers(
   }
 }
 
-fn find_local_headers(records: List(CentralRecord)) {
-  todo
+fn find_local_headers(records: List(CentralRecord), file: BitArray, out: List(#(String, BitArray))) -> List(#(String, BitArray)) {
+  
+  let #(first, rest) = list.split(records, 1)
+
+  let index_of_local_header = bit_array.byte_size(file) - { bytes_to_int(first.location) + bytes_to_int(first.relative_offset) }
+  let file_name_length = first.file_name_length
+  let extra_field_length = bit_array.split(file, index_of_local_header + 28, 2)
+  
+
+  case bit_array.byte_size(rest) {
+    0 -> 
+    _ ->
+  }
+}
+
+fn hash_file(file: BitArray) -> Int {
+  bit_array.base64_encode(file, False)
+  |> murmur3a.hash_string(7)
+  |> murmur3a.int_digest()
 }
