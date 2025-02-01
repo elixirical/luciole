@@ -3,4 +3,6 @@
 /build
 erl_crash.dump
 example.epub
+example.zip
 test.txt
+/testout

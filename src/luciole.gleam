@@ -241,13 +241,14 @@ fn read_central_headers(
 }
 
 fn find_local_headers(records: List(CentralRecord), file: BitArray, out: List(#(String, BitArray))) -> List(#(String, BitArray)) {
-  
+  //assumes unencrypted as per epub
   let #(first, rest) = list.split(records, 1)
 
   let index_of_local_header = bit_array.byte_size(file) - { bytes_to_int(first.location) + bytes_to_int(first.relative_offset) }
   let file_name_length = first.file_name_length
-  let extra_field_length = bit_array.split(file, index_of_local_header + 28, 2)
-  
+  let extra_field_length = result.unwrap(bit_array.slice(file, index_of_local_header + 28, 2), <<>>)
+  let filelength = first.uncompressed_size
+  let filedata = result.unwrap(bit_array.slice(file, index_of_local_header + 30 + file_name_length + extra_field_length, filelength))
 
   case bit_array.byte_size(rest) {
     0 -> 
