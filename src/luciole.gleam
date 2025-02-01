@@ -220,7 +220,6 @@ fn read_central_headers(
         <<>>,
       ),
     )
-  //something is wrong with the indexing of each entry i believe! ie. CentralHeader.location
   let nextarray =
     result.unwrap(
       bit_array.slice(
@@ -231,17 +230,21 @@ fn read_central_headers(
       ),
       <<>>,
     )
+  //something is wrong with the indexing of each entry i believe! ie. CentralHeader.location
+  // remember 3930 is the distance from EOF to the start of the first central header
   case bit_array.starts_with(nextarray, record.header) {
     True ->
       read_central_headers(
         nextarray,
-        header_offset + 46 + namelength + extrafield + filecomment,
+        header_offset - { 46 + namelength + extrafield + filecomment },
         [new_record, ..info],
       )
     False -> [new_record, ..info]
   }
 }
 
+//will need to figure out what directories need to be created, and what files belong in those directories before writing to them.
+//also even when i create teh directories manually it doesnt work?
 fn find_local_headers(
   records: List(CentralRecord),
   file: BitArray,
@@ -279,6 +282,7 @@ fn find_local_headers(
       <<>>,
     )
   let file_name = result.unwrap(bit_array.to_string(firstrecord.file_name), "")
+  let assert Ok(Nil) = simplifile.create_file("../testout/" <> file_name)
   let assert Ok(Nil) =
     simplifile.write_bits(to: "../testout/" <> file_name, bits: filedata)
 
